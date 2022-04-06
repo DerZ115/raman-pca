@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 from pybaselines.misc import beads
 from pybaselines.morphological import mormol, rolling_ball
 from pybaselines.whittaker import arpls, asls
@@ -103,6 +102,7 @@ class RangeLimiter(BaseEstimator, TransformerMixin):
 
     def _validate_params(self, X):
         self.reference = np.asarray(self.reference)
+        self.lim = list(self.lim)
         if len(self.lim) != 2:
             raise ValueError("Wrong number of values for lim.")
 

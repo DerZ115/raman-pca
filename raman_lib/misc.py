@@ -12,23 +12,26 @@ def mode(x):
 
 
 def load_data(path):
-    if path.endswith(".csv") or path.endswith(".txt") or path.endswith(".tsv"):
+    if path.lower().endswith(".csv") or \
+       path.lower().endswith(".txt") or \
+       path.lower().endswith(".tsv"):
         data = pd.read_csv(path)
 
     else:
         data = []
         labels = []
+        files = []
 
         for dir in os.listdir(path):
-            print(dir)
             for file in os.listdir(os.path.join(path, dir)):
+                files.append(file)
                 filepath = os.path.join(path, dir, file)
 
-                if filepath.endswith(".csv"):
+                if filepath.lower().endswith(".csv"):
                     data.append(np.loadtxt(filepath, sep=","))
-                elif filepath.endswith(".tsv"):
+                elif filepath.lower().endswith(".tsv"):
                     data.append(np.loadtxt(filepath, sep="\t"))
-                elif filepath.endswith(".txt"):
+                elif filepath.lower().endswith(".txt"):
                     data.append(np.loadtxt(filepath))
                 else:
                     try:
@@ -45,5 +48,7 @@ def load_data(path):
 
         data = pd.DataFrame(data[:,:,1], columns=data[0,:,0])
         data.insert(0, "label", labels)
+        if files:
+            data.insert(1, "file", files)
 
     return data

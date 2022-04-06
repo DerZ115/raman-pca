@@ -255,6 +255,8 @@ def score_sort_spectra(data,
     print(f"Max Score: {int(np.max(scores))}")
 
     if detailed:
-        return data_out, (intensity_scores, n_peaks)
+        return data_out, {"intensity_scores": intensity_scores, 
+                          "peak_score": n_peaks,
+                          "peak_pos": peaks}
     else:
         return data_out
