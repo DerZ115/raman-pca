@@ -102,6 +102,7 @@ def calc_scores(data, peaks, score_measure, n_peaks_influence):
 
     scores = []
     n_peaks_all = []
+    scores_peaks = []
 
     for i, row in enumerate(peaks):
         n_peaks = len(row)
@@ -124,15 +125,16 @@ def calc_scores(data, peaks, score_measure, n_peaks_influence):
         n_peaks_all.append(n_peaks)
 
         if n_peaks == 0:
-            scores_peaks = 0
+            scores_peaks.append(0)
         elif n_peaks_influence == 0:
-            scores_peaks = scores
+            scores_peaks.append(score)
         elif n_peaks_influence == 1:
-            scores_peaks = [n*score for n, score in zip(n_peaks_all, scores)]
+            scores_peaks.append(n_peaks*score)
         elif n_peaks_influence == 2:
-            scores_peaks = [score**(n/50)
-                            for n, score in zip(n_peaks_all, scores)]
+            scores_peaks.append(score**(n_peaks/50))
 
+    print(n_peaks_all)
+    print(scores_peaks)
     n_peaks_all = [n_peaks for _, n_peaks in sorted(
         zip(scores_peaks, n_peaks_all))]
     n_peaks_all.reverse()
