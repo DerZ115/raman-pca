@@ -24,27 +24,29 @@ def load_data(path):
 
         for dir in os.listdir(path):
             for file in os.listdir(os.path.join(path, dir)):
-                files.append(file)
                 filepath = os.path.join(path, dir, file)
 
                 if filepath.lower().endswith(".csv"):
-                    data.append(np.loadtxt(filepath, sep=","))
+                    spectrum = np.loadtxt(filepath, sep=",")
                 elif filepath.lower().endswith(".tsv"):
-                    data.append(np.loadtxt(filepath, sep="\t"))
+                    spectrum = np.loadtxt(filepath, sep="\t")
                 elif filepath.lower().endswith(".txt"):
-                    data.append(np.loadtxt(filepath))
+                    spectrum = np.loadtxt(filepath)
                 else:
                     try:
-                        data.append(convert_opus(filepath))
+                        spectrum = convert_opus(filepath)
                     except:
-                        raise ValueError(
-                            f"File {file} does not match any inplemented file format."
-                             "Use either plaintext (.csv, .tsv, .txt) or"
-                             "binary OPUS (.0, .1, ...) files")
-
+                        print(f"File {file} does not match any inplemented file format. Skipping...")
+                
+                data.append(spectrum)
+                files.append(file)
                 labels.append(dir)
-    
-        data = np.asarray(data)
+
+        try:
+            data = np.asarray(data, dtype=float)
+        except ValueError:
+            print("Data could not be combined into a single array. Perhaps some spectra cover different wavenumber ranges?")
+            return None
 
         data = pd.DataFrame(data[:,:,1], columns=data[0,:,0])
         data.insert(0, "label", labels)
