@@ -133,8 +133,6 @@ def calc_scores(data, peaks, score_measure, n_peaks_influence):
         elif n_peaks_influence == 2:
             scores_peaks.append(score**(n_peaks/50))
 
-    print(n_peaks_all)
-    print(scores_peaks)
     n_peaks_all = [n_peaks for _, n_peaks in sorted(
         zip(scores_peaks, n_peaks_all))]
     n_peaks_all.reverse()
