@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from pybaselines.misc import beads
 from pybaselines.morphological import mormol, rolling_ball
 from pybaselines.whittaker import arpls, asls
@@ -46,35 +47,16 @@ class BaselineCorrector(BaseEstimator, TransformerMixin):
         return X - bl
 
 
-class ColumnSelectorPCA(BaseEstimator, TransformerMixin):
-    """Class to select a range of components from PCA, so that components do not 
-    have to be calculated over and over."""
-
-    def __init__(self, n_components=None):
-        """Initialize range of components."""
-        if n_components == None:
-            n_components = -1
-        self.n_components = n_components
-
-    def fit(self, X, y=None):
-        """Does not do anything, included for compatibility with pipelines"""
-        return self
-
-    def transform(self, X, y=None):
-        """Return the previously selected range of components."""
-        return X[:, 0:self.n_components]
-
-
 class RangeLimiter(BaseEstimator, TransformerMixin):
     def __init__(self, lim=(None, None), reference=None):
         self.lim = lim
         self.reference = reference
 
     def fit(self, X, y=None):
+        self.lim = list(self.lim)
         self._validate_params(X)
 
         if self.reference is not None:
-
             self.lim_ = [
                 np.where(self.reference >= self.lim[0])[0][0],
                 np.where(self.reference <= self.lim[1])[0][-1] + 1
@@ -85,7 +67,11 @@ class RangeLimiter(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X, y=None):
-        return X[:, self.lim_[0]:self.lim_[1]]
+        if isinstance(X, pd.DataFrame):
+            result = X.iloc[:, self.lim_[0]:self.lim_[1]]
+        else:
+            result = X[:, self.lim_[0]:self.lim_[1]]
+        return result
 
     def _replace_nones(self, X):
         if self.lim[0] is None:
@@ -145,8 +131,11 @@ class PeakPicker(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         X_mean = X.mean(axis=0)
-        self.peaks_ = find_peaks(X_mean, distance=self.min_dist)[0]
+        self.peak_indices = find_peaks(X_mean, distance=self.min_dist)[0]
+        self.peaks_ = np.zeros((len(self.peak_indices), X.shape[1]), dtype=bool)
+        for i, j in enumerate(self.peak_indices):
+            self.peaks_[i, j] = True
         return self
 
     def transform(self, X, y=None):
-        return X[:, self.peaks_]
+        return X[:, self.peak_indices]

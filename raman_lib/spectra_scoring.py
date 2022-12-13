@@ -2,29 +2,36 @@ import numpy as np
 import time
 import pandas as pd
 from scipy.integrate import simpson
-from scipy.signal import argrelmin, savgol_filter
+from scipy.signal import argrelmax, argrelmin, savgol_filter
+from sklearn.preprocessing import normalize
 
-from .preprocessing import BaselineCorrector
+from .preprocessing import BaselineCorrector, RangeLimiter
+
+score_names = {0: "No Score",
+               1: "Median Height",
+               2: "Mean Height",
+               3: "Mean Area",
+               4: "Total Area"}
+
+peak_score_names = {0: "No Influence",
+                    1: "First Order Influence",
+                    2: "Second Order (Quadratic) Influence"}
 
 
-def limit_range(data, limit_low, limit_high):
+def limit_range(data, limits):
     """Limit the frequency range of spectral data.
 
     Args:
         data (pd.DataFrame): Raw spectral data, with each row representing one spectrum. IMPORTANT: Make sure that the column names (i.e. the frequencies/wavenumbers) are of type float or int.
-        limit_low (int or float or None): Lower limit of the spectral range.
-        limit_high (int or float or None): Upper limit of the spectral range.
 
     Returns:
         pd.DataFrame: Data with reduced range.
     """
-    if limit_low == None:
-        limit_low = data.columns[0]
+    wns = np.asarray(data.columns.astype(float))
 
-    if limit_high == None:
-        limit_high == data.columns[-1]
+    rl = RangeLimiter(lim=limits, reference=wns).fit(data)
 
-    return data.loc[:, limit_low:limit_high]
+    return rl.transform(data)
 
 
 def baseline_correction(data, method="asls"):
@@ -45,7 +52,7 @@ def baseline_correction(data, method="asls"):
     return data
 
 
-def peakRecognition(data, sg_window, threshold):
+def peakRecognition(data, data_bl, sg_window, bl_method="asls", threshold=0, min_height=0):
     """Determines the number of peaks in each spectrum based on a 2nd derivative Savitzky-Golay-Filter.
 
     Args:
@@ -57,31 +64,36 @@ def peakRecognition(data, sg_window, threshold):
     """
 
     wns = data.columns.astype("float64")
+    baseline = data - data_bl
+    data_sg = data.subtract(baseline.min(axis=1), axis=0).divide(baseline.max(axis=1), axis=0)
+    # data_sg = pd.DataFrame(normalize(data, norm="max"), columns=data.columns)
+    data_sg = baseline_correction(data_sg, method=bl_method)
+
     data_sg = pd.DataFrame(
-        savgol_filter(data, window_length=2*sg_window+1, polyorder=3, deriv=2), columns=wns)
+        savgol_filter(data_sg, window_length=sg_window, polyorder=3, deriv=1), columns=wns)
 
     peaks = []
 
     for i, row in data_sg.iterrows():
-        row_peaks = argrelmin(row.values)[0]
-        row_peaks = [peak for peak in row_peaks if row.iloc[peak]
-                     < -threshold]  # Remove peaks below threshold
+        row_peaks = np.where(np.diff(np.sign(row)))[0]
+        row_max = argrelmax(row.values)[0]
+        row_min = argrelmin(row.values)[0]
+        # Remove peaks below threshold
+        row_max = [j for j in row_max if row.iloc[j]
+                   > threshold and j < row_peaks[-1]]
+        row_min = [j for j in row_min if row.iloc[j]
+                   < -threshold and j > row_peaks[0]]
+        
+        peaks_max = np.searchsorted(row_peaks, row_max)
+        peaks_min = np.searchsorted(row_peaks, row_min) - 1
+        peaks_tmp = np.unique(np.concatenate((peaks_max, peaks_min)))
+        row_peaks = row_peaks[peaks_tmp]
+        
+        # Remove peaks that are too small
+        row_peaks = [j for j in row_peaks if data_bl.iloc[i, j:j+1].mean() >= min_height]
+        peaks.append(row_peaks)
 
-        # Combine peaks w/o positive 2nd derivative between them
-        peak_condensing = []
-        peaks_condensed = []
-        for j in range(len(row)):
-            if j in row_peaks:
-                peak_condensing.append(j)
-            if row.iloc[j] > 0 and len(peak_condensing) > 0:
-                peaks_condensed.append(int(np.mean(peak_condensing)))
-                peak_condensing = []
-        if len(peak_condensing) > 0:
-            peaks_condensed.append(int(np.mean(peak_condensing)))
-
-        peaks.append(peaks_condensed)
-
-    return peaks
+    return peaks, np.asarray(data_sg)
 
 
 def calc_scores(data, peaks, score_measure, n_peaks_influence):
@@ -131,11 +143,11 @@ def calc_scores(data, peaks, score_measure, n_peaks_influence):
         elif n_peaks_influence == 1:
             scores_peaks.append(n_peaks*score)
         elif n_peaks_influence == 2:
-            scores_peaks.append(score**(n_peaks/50))
+            scores_peaks.append(score*(n_peaks**2))
 
-    n_peaks_all = [n_peaks for _, n_peaks in sorted(
-        zip(scores_peaks, n_peaks_all))]
-    n_peaks_all.reverse()
+#    n_peaks_all = [n_peaks for _, n_peaks in sorted(
+#        zip(scores_peaks, n_peaks_all))]
+#    n_peaks_all.reverse()
     return scores_peaks, scores, n_peaks_all
 
 
@@ -168,7 +180,7 @@ def remove_low_quality(data, n=None, min_n=0, min_score=0):
     if n is not None:
         for _, group in data.groupby("label"):
             data_out = pd.concat([data_out, group.iloc[:n, :]])
-        
+
     elif min_score != 0:
         for _, group in data.groupby("label"):
             group_out = group.loc[group.score >= min_score, :]
@@ -192,6 +204,7 @@ def score_sort_spectra(data,
                        bl_method="asls",
                        sg_window=17,
                        threshold=0.5,
+                       min_height=0,
                        score_measure=1,
                        n_peaks_influence=1,
                        detailed=False):
@@ -224,27 +237,27 @@ def score_sort_spectra(data,
     else:
         files = None
 
-    data = data.loc[:, ~data.columns.isin(["label", "file"])]
+    data = data.drop(columns=["label", "file"])
 
-    data = limit_range(data, limits[0], limits[1])
+    data = limit_range(data, limits)
 
     data_bl = baseline_correction(data, method=bl_method)
 
-    peaks = peakRecognition(data_bl, sg_window, threshold)
+    peaks, deriv = peakRecognition(data, data_bl, sg_window, bl_method, threshold, min_height)
 
     scores, intensity_scores, n_peaks = calc_scores(
         data_bl, peaks, score_measure, n_peaks_influence)
 
     data_sorted = sort_spectra(orig_data, scores)
 
-    data_out = remove_low_quality(data_sorted, n=n, min_n=min_n, min_score=min_score)
+    data_out = remove_low_quality(
+        data_sorted, n=n, min_n=min_n, min_score=min_score)
 
     data_out.drop(columns="score", inplace=True)
 
     end_time = time.perf_counter()
 
     print(f"Analyzed {len(data)} spectra in {round(end_time-start_time, 2)} seconds.")
-    print()
     print(f"Mean Score: {int(np.mean(scores))}")
     print()
     print(f"1st Quartile: {int(np.quantile(scores, 0.25))}")
@@ -254,9 +267,11 @@ def score_sort_spectra(data,
     print(f"Min Score: {int(np.min(scores))}")
     print(f"Max Score: {int(np.max(scores))}")
 
+
     if detailed:
-        return data_out, {"intensity_scores": intensity_scores, 
-                          "peak_score": n_peaks,
-                          "peak_pos": peaks}
+        return data_out, deriv, {"intensity_scores": intensity_scores,
+                                 "peak_scores": n_peaks,
+                                 "total_scores": scores,
+                                 "peak_pos": peaks}
     else:
         return data_out

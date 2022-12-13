@@ -1,1 +1,6 @@
 data/
+img/
+results_qc/
+
+.ipynb_checkpoints
+__pycache__
