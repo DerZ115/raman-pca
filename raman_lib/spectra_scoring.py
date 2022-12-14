@@ -64,10 +64,8 @@ def peakRecognition(data, data_bl, sg_window, bl_method="asls", threshold=0, min
     """
 
     wns = data.columns.astype("float64")
-    baseline = data - data_bl
-    data_sg = data.subtract(baseline.min(axis=1), axis=0).divide(baseline.max(axis=1), axis=0)
     # data_sg = pd.DataFrame(normalize(data, norm="max"), columns=data.columns)
-    data_sg = baseline_correction(data_sg, method=bl_method)
+    data_sg = baseline_correction(normalize(data_sg, norm="max"), method=bl_method)
 
     data_sg = pd.DataFrame(
         savgol_filter(data_sg, window_length=sg_window, polyorder=3, deriv=1), columns=wns)
