@@ -44,7 +44,10 @@ def baseline_correction(data, method="asls"):
     Returns:
         pandas.DataFrame: Baseline-corrected spectra.
     """
-    wns = data.columns
+    try:
+        wns = data.columns
+    except AttributeError:
+        wns = np.arange(np.shape(data)[-1])
 
     bl = BaselineCorrector(method=method)
     data = bl.fit_transform(data)
@@ -64,9 +67,8 @@ def peakRecognition(data, data_bl, sg_window, bl_method="asls", threshold=0, min
     """
 
     wns = data.columns.astype("float64")
-    # data_sg = pd.DataFrame(normalize(data, norm="max"), columns=data.columns)
-    data_sg = baseline_correction(normalize(data_sg, norm="max"), method=bl_method)
 
+    data_sg = baseline_correction(normalize(data, norm="max"), method=bl_method)
     data_sg = pd.DataFrame(
         savgol_filter(data_sg, window_length=sg_window, polyorder=3, deriv=1), columns=wns)
 
