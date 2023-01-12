@@ -27,16 +27,17 @@ def load_data(path):
                 filepath = os.path.join(path, dir, file)
 
                 if filepath.lower().endswith(".csv"):
-                    spectrum = np.loadtxt(filepath, sep=",")
+                    spectrum = np.loadtxt(filepath, delimiter=",")
                 elif filepath.lower().endswith(".tsv"):
-                    spectrum = np.loadtxt(filepath, sep="\t")
+                    spectrum = np.loadtxt(filepath, delimiter="\t")
                 elif filepath.lower().endswith(".txt"):
-                    spectrum = np.loadtxt(filepath)
+                    spectrum = np.loadtxt(filepath, delimiter=",")
                 else:
                     try:
                         spectrum = convert_opus(filepath)
                     except:
                         print(f"File {file} does not match any inplemented file format. Skipping...")
+                        continue
                 
                 data.append(spectrum)
                 files.append(file)
