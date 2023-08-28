@@ -30,9 +30,8 @@ def plot_spectra_peaks(wns, signal, deriv, peaks, scores, labels=None):
     ax1.set_xlim(wns[0], wns[-1])
     ax1.grid()
 
-    ax1.set_xlabel("Raman Shift ($\mathregular{cm^{-1}}$)",
-                  fontdict={"weight": "bold", "size": 12})
-    ax2.set_ylabel("Intensity (-)")
+    ax1.set_xlabel("")
+    ax1.set_ylabel("Intensity (-)")
 
     line2, = ax2.plot(wns, deriv[0,:])
 
