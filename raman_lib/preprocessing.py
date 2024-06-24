@@ -1,3 +1,5 @@
+from types import NoneType
+
 import numpy as np
 import pandas as pd
 from pybaselines.misc import beads
@@ -57,13 +59,13 @@ class RangeLimiter(BaseEstimator, TransformerMixin):
 
         if self.reference is not None:
             self.lim = np.array(
-                (np.where(self.reference >= l0)[0][0],
-                 np.where(self.reference <= l1)[0][-1] + 1)
-                for l0, l1 in zip(self.lim[::2], self.lim[1::2])
+                [(np.where(self.reference >= l0)[0][0],
+                  np.where(self.reference <= l1)[0][-1] + 1)
+                 for l0, l1 in zip(self.lim[::2], self.lim[1::2])]
             ).flatten()
         else:
             self.lim = np.array(
-                (l0, l1) for l0, l1 in zip(self.lim[::2], self.lim[1::2])
+                [(l0, l1) for l0, l1 in zip(self.lim[::2], self.lim[1::2])]
             ).flatten()
         return self
 
@@ -102,8 +104,9 @@ class RangeLimiter(BaseEstimator, TransformerMixin):
 
         if len(self.lim) % 2 != 0:
             raise ValueError("Odd number of values for limits.")
-        if not all(isinstance(val, int | float) for val in self.lim):
-            raise ValueError("Non-numeric values in limits.")
+        if not all([isinstance(val, (int, float, NoneType)) for val in self.lim]):
+            raise TypeError("Non-numeric values in limits.")
+
         if len(self.lim) > 2 and any(val is None for val in self.lim[1:-1]):
             raise ValueError("Only the first and last limit can be None.")
 
