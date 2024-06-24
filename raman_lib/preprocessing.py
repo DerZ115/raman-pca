@@ -1,4 +1,3 @@
-from itertools import batched
 import numpy as np
 import pandas as pd
 from pybaselines.misc import beads
@@ -60,20 +59,20 @@ class RangeLimiter(BaseEstimator, TransformerMixin):
             self.lim = np.array(
                 (np.where(self.reference >= l0)[0][0],
                  np.where(self.reference <= l1)[0][-1] + 1)
-                for l0, l1 in batched(self.lim, 2)
+                for l0, l1 in zip(self.lim[::2], self.lim[1::2])
             ).flatten()
         else:
             self.lim = np.array(
-                (l0, l1) for l0, l1 in batched(self.lim, 2)
+                (l0, l1) for l0, l1 in zip(self.lim[::2], self.lim[1::2])
             ).flatten()
         return self
 
     def transform(self, X, y=None):
         if isinstance(X, pd.DataFrame):
-            return pd.concat([X.iloc[:, l0:l1] for l0, l1 in batched(self.lim, 2)],
+            return pd.concat([X.iloc[:, l0:l1] for l0, l1 in zip(self.lim[::2], self.lim[1::2])],
                              axis=1)
         else:
-            result = np.concatenate([X[:, l0:l1] for l0, l1 in batched(self.lim, 2)],
+            result = np.concatenate([X[:, l0:l1] for l0, l1 in zip(self.lim[::2], self.lim[1::2])],
                                     axis=1)
         return result
 
