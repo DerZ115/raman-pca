@@ -1,3 +1,4 @@
+from itertools import batched
 import numpy as np
 import pandas as pd
 from pybaselines.misc import beads
@@ -53,24 +54,27 @@ class RangeLimiter(BaseEstimator, TransformerMixin):
         self.reference = reference
 
     def fit(self, X, y=None):
-        self.lim = list(self.lim)
         self._validate_params(X)
 
         if self.reference is not None:
-            self.lim_ = [
-                np.where(self.reference >= self.lim[0])[0][0],
-                np.where(self.reference <= self.lim[1])[0][-1] + 1
-            ]
+            self.lim = np.array(
+                (np.where(self.reference >= l0)[0][0],
+                 np.where(self.reference <= l1)[0][-1] + 1)
+                for l0, l1 in batched(self.lim, 2)
+            ).flatten()
         else:
-            self.lim_ = [self.lim[0], self.lim[1] + 1]
-
+            self.lim = np.array(
+                (l0, l1) for l0, l1 in batched(self.lim, 2)
+            ).flatten()
         return self
 
     def transform(self, X, y=None):
         if isinstance(X, pd.DataFrame):
-            result = X.iloc[:, self.lim_[0]:self.lim_[1]]
+            return pd.concat([X.iloc[:, l0:l1] for l0, l1 in batched(self.lim, 2)],
+                             axis=1)
         else:
-            result = X[:, self.lim_[0]:self.lim_[1]]
+            result = np.concatenate([X[:, l0:l1] for l0, l1 in batched(self.lim, 2)],
+                                    axis=1)
         return result
 
     def _replace_nones(self, X):
@@ -80,21 +84,29 @@ class RangeLimiter(BaseEstimator, TransformerMixin):
             else:
                 self.lim[0] = self.reference[0]
 
-        if self.lim[1] is None:
+        if self.lim[-1] is None:
             if self.reference is None:
-                self.lim[1] = X.shape[1]
+                self.lim[-1] = X.shape[1]
             else:
-                self.lim[1] = self.reference[-1]
+                self.lim[-1] = self.reference[-1]
 
     def _validate_params(self, X):
-        self.reference = np.asarray(self.reference)
-        self.lim = list(self.lim)
-        if len(self.lim) != 2:
-            raise ValueError("Wrong number of values for lim.")
+        if self.reference is not None:
+            if np.any(self.reference[:-1] > self.reference[1:]):
+                raise ValueError("Reference array is not sorted.")
+            self.reference = np.asarray(self.reference)
 
-        if self.reference is not None and \
-                np.any(self.reference[:-1] > self.reference[1:]):
-            raise ValueError("Reference array is not sorted.")
+        if self.lim is None:
+            self.lim = np.array((None, None), dtype=int)
+        else:
+            self.lim = np.asarray(self.lim)
+
+        if len(self.lim) % 2 != 0:
+            raise ValueError("Odd number of values for limits.")
+        if not all(isinstance(val, int | float) for val in self.lim):
+            raise ValueError("Non-numeric values in limits.")
+        if len(self.lim) > 2 and any(val is None for val in self.lim[1:-1]):
+            raise ValueError("Only the first and last limit can be None.")
 
         self._replace_nones(X)
 

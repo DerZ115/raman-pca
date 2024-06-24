@@ -4,3 +4,5 @@ results_qc/
 
 .ipynb_checkpoints
 __pycache__
+
+.idea
