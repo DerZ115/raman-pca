@@ -107,8 +107,6 @@ class RangeLimiter(BaseEstimator, TransformerMixin):
 
         if len(self.lim) % 2 != 0:
             raise ValueError("Odd number of values for limits.")
-        if not all([isinstance(val, (int, float, NoneType)) for val in self.lim]):
-            raise TypeError("Non-numeric values in limits.")
 
         if len(self.lim) > 2 and any(val is None for val in self.lim[1:-1]):
             raise ValueError("Only the first and last limit can be None.")
