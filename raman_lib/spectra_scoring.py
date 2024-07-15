@@ -31,7 +31,7 @@ def limit_range(data, limits):
 
     rl = RangeLimiter(lim=limits, reference=wns).fit(data)
 
-    return rl.transform(data)
+    return rl.transform(data), rl.lim_
 
 
 def baseline_correction(data, method="asls"):
@@ -55,7 +55,7 @@ def baseline_correction(data, method="asls"):
     return data
 
 
-def peakRecognition(data, data_bl, sg_window, bl_method="asls", threshold=0, min_height=0):
+def peakRecognition(data, limits, sg_window, threshold=0, min_height=0):
     """Determines the number of peaks in each spectrum based on a 2nd derivative Savitzky-Golay-Filter.
 
     Args:
@@ -68,9 +68,20 @@ def peakRecognition(data, data_bl, sg_window, bl_method="asls", threshold=0, min
 
     wns = data.columns.astype("float64")
 
-    data_sg = baseline_correction(normalize(data, norm="max"), method=bl_method)
-    data_sg = pd.DataFrame(
-        savgol_filter(data_sg, window_length=sg_window, polyorder=3, deriv=1), columns=wns)
+    if limits is None or len(limits) == 2:
+        data_sg = normalize(data, norm="max")  # baseline_correction(normalize(data, norm="max"), method=bl_method)
+        data_sg = pd.DataFrame(savgol_filter(data_sg, window_length=sg_window, polyorder=3, deriv=1), columns=wns)
+
+    else:
+        breaks = np.cumsum([l1 - l0 for l0, l1 in zip(limits[::2],
+                                                      limits[1::2])])[:-1]
+        parts = np.split(data.values, breaks, axis=1)
+        data_sg = []
+        for part in parts:
+            tmp = normalize(part, norm="max")
+            data_sg.append(savgol_filter(tmp, window_length=sg_window, polyorder=3, deriv=1))
+        data_sg = np.concatenate(data_sg, axis=1)
+        data_sg = pd.DataFrame(data_sg, columns=wns)
 
     peaks = []
 
@@ -90,7 +101,7 @@ def peakRecognition(data, data_bl, sg_window, bl_method="asls", threshold=0, min
         row_peaks = row_peaks[peaks_tmp]
         
         # Remove peaks that are too small
-        row_peaks = [j for j in row_peaks if data_bl.iloc[i, j:j+1].mean() >= min_height]
+        row_peaks = [j for j in row_peaks if data.iloc[i, j:j+1].mean() >= min_height]
         peaks.append(row_peaks)
 
     return peaks, np.asarray(data_sg)
@@ -175,11 +186,12 @@ def remove_low_quality(data, n=None, min_n=0, min_score=0):
     if min_score == 0 and min_n != 0:
         raise ValueError("min_n only works in combination with min_score")
 
-    data_out = pd.DataFrame(columns=data.columns)
+    data_out = []
 
     if n is not None:
         for _, group in data.groupby("label"):
-            data_out = pd.concat([data_out, group.iloc[:n, :]])
+            data_out.append(group.iloc[:n, :])
+        data_out = pd.concat(data_out)
 
     elif min_score != 0:
         for _, group in data.groupby("label"):
@@ -238,12 +250,12 @@ def score_sort_spectra(data,
         files = None
 
     data = data.drop(columns=["label", "file"])
-
-    data = limit_range(data, limits)
+    data_rl, lims = limit_range(data, limits)
 
     data_bl = baseline_correction(data, method=bl_method)
+    data_bl, _ = limit_range(data_bl, limits)
 
-    peaks, deriv = peakRecognition(data, data_bl, sg_window, bl_method, threshold, min_height)
+    peaks, deriv = peakRecognition(data_bl, lims, sg_window, threshold, min_height)
 
     scores, intensity_scores, n_peaks = calc_scores(
         data_bl, peaks, score_measure, n_peaks_influence)
